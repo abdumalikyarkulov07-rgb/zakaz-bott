@@ -1,5 +1,6 @@
 import os
 import threading
+import asyncio
 from flask import Flask
 from pyrogram import Client, filters
 from pyrogram.types import (
@@ -132,7 +133,12 @@ async def callback_handler(client, callback_query):
         except:
             await callback_query.answer("Xato: Mijoz botni bloklagan.")
 
+# --- ISHGA TUSHIRISH (MAIN) ---
 if __name__ == "__main__":
-    threading.Thread(target=run_flask).start()
-    print("Server va Bot ishga tushirildi...")
-    app.run()
+    # 1. Flask veb-serverni alohida oqimda (thread) daemon rejimida boshlaymiz
+    threading.Thread(target=run_flask, daemon=True).start()
+    print("Veb server port tinglashni boshladi...")
+
+    # 2. Pyrogram uchun asinxron event loopni olib, botni ishga tushiramiz
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(app.run())
