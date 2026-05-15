@@ -1,5 +1,6 @@
 import os
 import threading
+import asyncio
 from flask import Flask
 from pyrogram import Client, filters
 from pyrogram.types import (
@@ -17,7 +18,7 @@ def home():
     return "Bot 24/7 rejimida ishlamoqda!"
 
 def run_flask():
-    # Render avtomatik PORT beradi, agar bermasa 8080 ishlatiladi
+    # Render PORT-ni avtomatik beradi
     port = int(os.environ.get("PORT", 8080))
     server.run(host='0.0.0.0', port=port)
 
@@ -25,9 +26,10 @@ def run_flask():
 API_ID = 37885214
 API_HASH = "57ac0d55356c041d7d6210ba8d869116"
 BOT_TOKEN = "8977291889:AAFwOAw_n2wQW2c7tQaYbZfZ57pv553RxA0"
-HAYDOVCHILAR_GURUHI = -1005115669498 
+HAYDOVCHILAR_GURUHI = -5115669498
 ADMIN_USERNAME = "N1toshkenchi"
 
+# Client yaratish (bot_token bilan)
 app = Client("zakaz_bot_render", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
 # Ma'lumotlar bazasi (vaqtinchalik xotira)
@@ -35,7 +37,6 @@ navbat_list = []
 user_temp_data = {}
 
 def get_navbat_text():
-    """Navbat ro'yxatini rasmga moslab chiqarish"""
     if not navbat_list:
         return "🚕 **NAVBAТDAGI HAYDOVCHILAR:**\n\nNavbat hozircha bo'sh."
     
@@ -87,7 +88,7 @@ async def process_order(client, message):
         del user_temp_data[user_id]
 
 # --- GURUH VA NAVBAT HANDLERLARI ---
-@app.on_message(filters.command("navbat") & filters.group)
+@app.on_message(filters.command("navbat") & (filters.group | filters.supergroup))
 async def show_queue(client, message):
     buttons = InlineKeyboardMarkup([
         [InlineKeyboardButton("➕ Navbatga turish", callback_data="join"),
@@ -117,6 +118,7 @@ async def callback_handler(client, callback_query):
         await callback_query.answer("Siz ro'yxatda yo'qsiz.")
 
     elif data.startswith("done_"):
+        # Faqat navbatdagi haydovchi yoki admin qabul qila olishi uchun tekshiruv qo'shish mumkin
         for i, driver in enumerate(navbat_list):
             if driver['id'] == user_id:
                 navbat_list.pop(i)
@@ -132,7 +134,18 @@ async def callback_handler(client, callback_query):
         except:
             await callback_query.answer("Xato: Mijoz botni bloklagan.")
 
+# --- ASOSIY ISHGA TUSHIRISH ---
+async def main():
+    # Flaskni alohida oqimda ishga tushirish
+    threading.Thread(target=run_flask, daemon=True).start()
+    
+    print("Bot ishga tushmoqda...")
+    await app.start()
+    # Botni har doim aktiv saqlash uchun
+    await asyncio.Event().wait()
+
 if __name__ == "__main__":
-    threading.Thread(target=run_flask).start()
-    print("Server va Bot ishga tushirildi...")
-    app.run()
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        pass
