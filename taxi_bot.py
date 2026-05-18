@@ -22,7 +22,7 @@ def run_flask():
 API_ID = 37885214
 API_HASH = "57ac0d55356c041d7d6210ba8d869116"
 BOT_TOKEN = "8977291889:AAFwOAw_n2wQW2c7tQaYbZfZ57pv553RxA0"
-HAYDOVCHILAR_GURUHI = -5115669498  # Sizning guruh ID
+HAYDOVCHILAR_GURUHI = -5115669498
 
 app = Client("taxi_individual_final", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
@@ -48,15 +48,12 @@ def get_navbat_text():
 
 async def send_to_next_driver(client, customer_id):
     order = active_orders.get(customer_id)
-    
-    # Agar navbatda hech kim qolmagan bo'lsa
     if not order or order["driver_index"] >= len(navbat_list):
-        await client.send_message(customer_id, "Kechirasiz, hozircha barcha haydovchilar band yoki buyurtmani rad etishdi.")
+        await client.send_message(customer_id, "Kechirasiz, hozircha barcha haydovchilar band yoki rad etishdi.")
         if customer_id in active_orders: del active_orders[customer_id]
         return
 
     driver = navbat_list[order["driver_index"]]
-    
     buttons = InlineKeyboardMarkup([
         [InlineKeyboardButton("✅ Qabul qilish", callback_data=f"acc_{customer_id}"),
          InlineKeyboardButton("❌ Rad etish", callback_data=f"rej_{customer_id}")]
@@ -68,8 +65,7 @@ async def send_to_next_driver(client, customer_id):
             f"🆕 **YANGI BUYURTMA!**\n\n📍 Manzil: {order['text']}\n\nSiz navbatda birinchisiz. Qabul qilasizmi?",
             reply_markup=buttons
         )
-    except Exception as e:
-        # Agar haydovchi botni bloklagan bo'lsa, keyingisiga o'tamiz
+    except:
         order["driver_index"] += 1
         await send_to_next_driver(client, customer_id)
 
@@ -89,7 +85,6 @@ async def join(client, message):
     if not any(d['id'] == user_id for d in navbat_list):
         navbat_list.append({"id": user_id, "name": message.from_user.first_name})
         await message.reply(f"Siz navbatga turdingiz. O'rningiz: {len(navbat_list)}")
-        # Guruhga ham xabar berish (ixtiyoriy)
         await client.send_message(HAYDOVCHILAR_GURUHI, f"➕ {message.from_user.first_name} navbatga qo'shildi.")
     else:
         await message.reply("Siz allaqachon navbatdasiz.")
@@ -104,14 +99,15 @@ async def leave(client, message):
 async def order_start(client, message):
     if not navbat_list:
         return await message.reply("Hozircha bo'sh haydovchilar yo'q. Iltimos, birozdan keyin urinib ko'ring.")
-    await message.reply("Qayerga borasiz va telefon raqamingizni yozing:")
+    await message.reply("Qayerga borasiz? Iltimos, manzil va tel raqamingizni yozing:")
 
-@app.on_message(filters.private & ~filters.command("start") & ~filters.regex("Navbat|Chiqish|Taxi"))
+# MANZIL FILTRI (Tugmalar bilan chalkashmaslik uchun)
+@app.on_message(filters.private & ~filters.command("start") & ~filters.regex("^(➕ Navbatga turish|➖ Chiqish|🚕 Taxi buyurtma berish)$"))
 async def get_address(client, message):
     customer_id = message.from_user.id
-    # Agar mijoz allaqachon buyurtma bergan bo'lsa, eskisini o'chiramiz
+    # Faqat mijoz taxi buyurtma bermoqchi bo'lsa
     active_orders[customer_id] = {"text": message.text, "driver_index": 0}
-    await message.reply("✅ Buyurtmangiz qabul qilindi. Navbatdagi haydovchiga yuborildi, javobini kuting...")
+    await message.reply("✅ Buyurtmangiz qabul qilindi. Navbatdagi haydovchiga yuborildi.")
     await send_to_next_driver(client, customer_id)
 
 @app.on_callback_query()
@@ -122,22 +118,18 @@ async def callbacks(client, callback):
     
     if data.startswith("acc_"):
         if customer_id not in active_orders:
-            return await callback.answer("Bu buyurtma allaqachon olingan yoki bekor qilingan.", show_alert=True)
+            return await callback.answer("Bu buyurtma allaqachon olingan.", show_alert=True)
             
-        await callback.message.edit_text(f"✅ Buyurtmani qabul qildingiz!\n📍 Manzil: {active_orders[customer_id]['text']}")
+        await callback.message.edit_text(f"✅ Qabul qilindi!\n📍 Manzil: {active_orders[customer_id]['text']}")
         await client.send_message(customer_id, f"✅ Haydovchi buyurtmani qabul qildi!\nAloqa: @{callback.from_user.username}")
         
-        # Haydovchini navbatdan chiqaramiz
         global navbat_list
         navbat_list = [d for d in navbat_list if d['id'] != driver_id]
-        
-        # Guruhga hisobot
-        await client.send_message(HAYDOVCHILAR_GURUHI, f"🚖 Buyurtma olindi!\nHaydovchi: {callback.from_user.first_name}\nMijoz ID: {customer_id}")
-        
+        await client.send_message(HAYDOVCHILAR_GURUHI, f"🚖 Buyurtma olindi: {callback.from_user.first_name}")
         del active_orders[customer_id]
     
     elif data.startswith("rej_"):
-        await callback.message.edit_text("❌ Siz buyurtmani rad etdingiz.")
+        await callback.message.edit_text("❌ Rad etildi.")
         if customer_id in active_orders:
             active_orders[customer_id]["driver_index"] += 1
             await send_to_next_driver(client, customer_id)
